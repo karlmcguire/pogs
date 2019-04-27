@@ -8,11 +8,10 @@ Fetcher is a small script for downloading every log file listed on the [UNCC Pol
 
 ### running
 
-Run the following commands from your Terminal or Command Prompt:
+Run the following command from your Terminal or Command Prompt:
 
 ```
-$ cd fetcher
-$ python3.7 fetcher.py
+python3.7 ./fetcher/fetcher.py
 ```
 
-This will create the `pdfs/` directory and download write each PDF inside that folder.
+This will create the `pdfs/` directory and write each log PDF inside that folder.
