@@ -5,8 +5,6 @@ import fitz
 import json
 import os
 
-pdfs = "./pdfs/"
-
 class Extractor:
     def __init__(self, file):
         self.file = file
@@ -60,21 +58,187 @@ class Extractor:
         return self.filtered(self.rows(self.positions()))
 
 class Incident:
+    locations = {
+        "atkins",
+        "bioinformatics",
+        "epic",
+        "belk",
+        "parking",
+        "lot",
+        "union",
+        "levin",
+        "levine",
+        "hall",
+        "richardson",
+        "cameron",
+        "student",
+        "light",
+        "sanford",
+        "fretwell",
+        "colvard",
+        "alumni",
+        "lex",
+        "lynch",
+        "mcenery",
+        "mceniry",
+        "belk",
+        "cri",
+        "south",
+        "niner",
+        "east",
+        "van",
+        "greek",
+        "cone",
+        "broadrick/mary",
+        "king",
+        "foundation",
+        "west",
+        "early",
+        "pps",
+        "chhs",
+        "woodward",
+        "miltimore",
+        "phillips",
+        "holshouser",
+        "pps-walk-in/lynch",
+        "nrfc",
+        "poplar",
+        "mary",
+        "hawthorne",
+        "north",
+        "police",
+        "facilities",
+        "duke",
+        "coe",
+        "college",
+        "e.",
+        "akins",
+        "agency",
+        "rowe",
+        "hawthorn",
+        "wallis"
+    }
+
     def __init__(self, data):
-        self.number = self.__get_number(data)
+        self.number,      rest = self.__get_number(data)
+        self.type,        rest = self.__get_type(rest)
+        self.location,    rest = self.__get_location(rest)
+        self.reported,    rest = self.__get_reported(rest)
+        self.secured,     rest = self.__get_secured(rest)
+        self.occurred,    rest = self.__get_occurred(rest)
+        self.disposition, rest = self.__get_disposition(rest)
+        self.description, rest = self.__get_description(rest)
 
     def __get_number(self, data):
-        return data[0].split(" ")[1].split("-")[0]
+        return (data[1].split("-")[0], 
+                data[1:])
 
-    def __str__(self):
-        return self.number
+    def __get_type(self, data):
+        def parse(left, line, i):
+            # some types are appended to the report number
+            if i == 0:
+                left = line[0].split("-")[1]
+                left = left[1:] + " " if len(left) > 3 else ""
+                line = line[1:]
+            # go until we run into the location column
+            if i == 12 or line[0].lower() in self.locations: 
+                return (left.strip(), line)
+            left += line[0] + " "
+            line = line[1:]
+            return parse(left, line, i + 1)
+        return parse("", data, 0)
+
+    def __get_location(self, data):
+        def is_date(word):
+            return len(word.split("/")) >= 3
+        def parse(left, line, i):
+            # go until we run into the date reported column
+            if i == 10 or is_date(line[0].lower()):
+                return (left.strip(), line)
+            left += line[0] + " "
+            line = line[1:]
+            return parse(left, line, i + 1)
+        return parse("", data, 0)
+
+    def __get_reported(self, data):
+        def parse(left, line, i):
+            # 04/22/2019 04/22/2019 at 04:03
+            if len(line[0].split("/")) == 3:
+                if len(line[1].split("/")) == 3:
+                    left += line[0] + " "
+                    line = line[1:]
+                    return (left.strip(), line)
+            # 03/08/2019 06:30 and
+            # 04/23/2019 at 11:39
+            if len(line[0].split(":")) == 2:
+                left += line[0] + " "
+                line = line[1:]
+                return (left.strip(), line)
+            # at most (date) at (time)
+            if i == 3:
+                return (left.strip(), line)
+            left += line[0] + " "
+            line = line[1:]
+            return parse(left, line, i + 1)
+        return parse("", data, 0)
+
+    def __get_secured(self, data):
+        def parse(left, line, i):
+            # some have the word "at" and some don't (wack)
+            if len(line[0].split(":")) == 2:
+                left += line[0] + " "
+                line = line[1:]
+                return (left.strip(), line)
+            # go until occurred statement
+            if i == 3 or line[0].find("Occurred") != -1:
+                return (left.strip(), line)
+            left += line[0] + " "
+            line = line[1:]
+            return parse(left, line, i + 1)
+        return parse("", data, 0)
+
+    def __get_occurred(self, data):
+        def parse(left, line, i):
+            # go until the disposition
+            if i == 10 or (line[0].split("/")[0] == "Open" or
+                           line[0].split("/")[0] == "Closed"):
+                return (left.strip(), line)
+            left += line[0] + " "
+            line = line[1:]
+            return parse(left, line, i + 1)
+        return parse("", data, 0)
+
+    def __get_disposition(self, data):
+        def parse(left, line, i):
+            # go until INCIDENT DESCRIPTION (next line)
+            if i == 5 or line[0] == "INCIDENT":
+                return (left.strip(), line)
+            left += line[0] + " "
+            line = line[1:]
+            return parse(left, line, i + 1)
+        return parse("", data, 0)
+
+    def __get_description(self, data):
+        def parse(left, line, i):
+            # we read the entire description
+            if len(line) == 0:
+                return (left.strip(), line)
+            # ignore the INCIDENT DESCRIPTION words
+            if line[0] == "INCIDENT":
+                line = line[2:]
+            left += line[0] + " "
+            line = line[1:]
+            return parse(left, line, i + 1)
+        return parse("", data, 0)
 
 
+pref = "./pdfs/"
 
-for path in os.listdir(pdfs):
-    file = fitz.open(pdfs + path)
+# iterate through every pdf and extract the incidents
+for path in os.listdir(pref):
+    file = fitz.open(pref + path)
     for i in range(0, file.pageCount):
         page = file.loadPage(i).getText("dict")
         for raw in Extractor(page).extract():
-            incident = Incident(raw)
-            print(incident.number)
+            incident = Incident((" ").join(raw).split(" "))
+            print(path, incident.type)
