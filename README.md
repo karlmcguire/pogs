@@ -15,3 +15,7 @@ python3.7 ./fetcher/fetcher.py
 ```
 
 This will create the `pdfs/` directory and write each log PDF inside that folder.
+
+## scanner
+
+Scanner reads each log file in `pdfs/`, extracts, parses, and cleans up the text, then stores the formatted data in a CSV file.
